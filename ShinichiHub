@@ -1,0 +1,149 @@
+-- 🔄 Chọn Team (Marines hoặc Pirates)
+if _G.MARINES and (not game.Players.LocalPlayer.Team or game.Players.LocalPlayer.Team.Name ~= "Marines") then
+    game.ReplicatedStorage.Remotes.CommF_:InvokeServer("SetTeam", "Marines")
+    wait(2)
+elseif not _G.MARINES and (not game.Players.LocalPlayer.Team or game.Players.LocalPlayer.Team.Name ~= "Pirates") then
+    game.ReplicatedStorage.Remotes.CommF_:InvokeServer("SetTeam", "Pirates")
+    wait(2)
+end
+
+-- 🕗 Lag 20 giây trước khi bắt đầu
+local function ExtremeLag()
+    local lagTime = tick() + 20
+    while tick() < lagTime do end
+end
+ExtremeLag()
+
+-- 🌟 UI Setup (Không nền đen, giống ảnh của bạn)
+local ScreenGui = Instance.new("ScreenGui")
+local MainFrame = Instance.new("Frame")
+local Title = Instance.new("TextLabel")
+local TimerLabel = Instance.new("TextLabel")
+local StatusLabel = Instance.new("TextLabel")
+local ChestCountLabel = Instance.new("TextLabel")  -- Hiển thị số rương đã nhặt
+
+ScreenGui.Parent = game:GetService("CoreGui")
+MainFrame.Parent = ScreenGui
+MainFrame.BackgroundTransparency = 1  -- Ẩn nền
+MainFrame.Size = UDim2.new(0, 400, 0, 150)
+MainFrame.Position = UDim2.new(0.5, -200, 0.05, 0)
+
+Title.Parent = MainFrame
+Title.Text = "Shinichi Hub ( Auto Chest )"
+Title.Size = UDim2.new(1, 0, 0.2, 0)
+Title.BackgroundTransparency = 1
+Title.TextColor3 = Color3.fromRGB(255, 204, 0)
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 28
+
+TimerLabel.Parent = MainFrame
+TimerLabel.Text = "Time: 00m00s"
+TimerLabel.Size = UDim2.new(1, 0, 0.2, 0)
+TimerLabel.Position = UDim2.new(0, 0, 0.2, 0)
+TimerLabel.BackgroundTransparency = 1
+TimerLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+TimerLabel.Font = Enum.Font.GothamBold
+TimerLabel.TextSize = 22
+
+StatusLabel.Parent = MainFrame
+StatusLabel.Text = "Status: Collecting Chests..."
+StatusLabel.Size = UDim2.new(1, 0, 0.2, 0)
+StatusLabel.Position = UDim2.new(0, 0, 0.4, 0)
+StatusLabel.BackgroundTransparency = 1
+StatusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+StatusLabel.Font = Enum.Font.GothamBold
+StatusLabel.TextSize = 22
+
+ChestCountLabel.Parent = MainFrame
+ChestCountLabel.Text = "Chests Collected: 0"
+ChestCountLabel.Size = UDim2.new(1, 0, 0.2, 0)
+ChestCountLabel.Position = UDim2.new(0, 0, 0.6, 0)
+ChestCountLabel.BackgroundTransparency = 1
+ChestCountLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+ChestCountLabel.Font = Enum.Font.GothamBold
+ChestCountLabel.TextSize = 22
+
+-- 🎯 Auto Chest (Tween tốc độ hợp lý)
+local TweenService = game:GetService("TweenService")
+local function TweenToPosition(position, distance)
+    local player = game.Players.LocalPlayer
+    local char = player.Character
+    if not char then return end
+    
+    local humanoidRootPart = char:FindFirstChild("HumanoidRootPart")
+    if humanoidRootPart then
+        local speed = math.clamp(distance / 100 + 1, 1, 3) -- Xa thì nhanh 50%, gần thì nhanh bình thường
+        local tweenInfo = TweenInfo.new(speed, Enum.EasingStyle.Linear)
+        local tween = TweenService:Create(humanoidRootPart, tweenInfo, {CFrame = CFrame.new(position)})
+        tween:Play()
+    end
+end
+
+_G.AutoChest = true
+local chestCount = 0  -- Đếm số rương đã nhặt
+
+spawn(function()
+    while _G.AutoChest do
+        wait(0.5)
+        local player = game.Players.LocalPlayer
+        local char = player.Character or player.CharacterAdded:Wait()
+        local pos = char:GetPivot().Position
+        local chests = game:GetService("CollectionService"):GetTagged("_ChestTagged")
+        local closestDist, closestChest = math.huge
+
+        for _, chest in pairs(chests) do
+            if not chest:GetAttribute("IsDisabled") then
+                local dist = (chest:GetPivot().Position - pos).Magnitude
+                if dist < closestDist then
+                    closestDist, closestChest = dist, chest
+                end
+            end
+        end
+
+        if closestChest then
+            StatusLabel.Text = "Status: Moving to Chest..."
+            local chestPos = closestChest:GetPivot().Position
+            TweenToPosition(chestPos, closestDist)  -- Dùng Tween với tốc độ hợp lý
+            wait(math.clamp(closestDist / 100 + 1, 1, 3))  -- Đợi đến nơi, xa thì lâu hơn
+            StatusLabel.Text = "Status: Collecting Chest..."
+            chestCount = chestCount + 1  -- Tăng số rương đã nhặt
+            ChestCountLabel.Text = "Chests Collected: " .. chestCount
+        end
+    end
+end)
+
+-- 🔄 Hop Server (Nếu nhặt đủ 50 rương hoặc không còn rương)
+spawn(function()
+    while _G.AutoChest do
+        wait(5)
+        local chests = #game:GetService("CollectionService"):GetTagged("_ChestTagged")
+
+        if chestCount >= 50 or chests == 0 then
+            StatusLabel.Text = "Status: Hopping Server..."
+            wait(2)
+            game:GetService("TeleportService"):Teleport(game.PlaceId)
+        end
+    end
+end)
+
+-- ⏳ Timer (Hiển thị thời gian)
+spawn(function()
+    local seconds = 0
+    while _G.AutoChest do
+        wait(1)
+        seconds = seconds + 1
+        local minutes = math.floor(seconds / 60)
+        local secs = seconds % 60
+        TimerLabel.Text = string.format("Time: %02dm%02ds", minutes, secs)
+    end
+end)
+
+-- 🎮 Tùy chỉnh FPS Boost
+local function SetGraphicsQuality(level)
+    local PlayerSettings = game:GetService("Players").LocalPlayer.PlayerSettings
+    PlayerSettings.SavingEnabled = true
+    PlayerSettings.GraphicsQuality = level
+end
+
+-- Bạn có thể thay đổi mức độ đồ họa từ 0 (thấp nhất) đến 10 (cao nhất)
+SetGraphicsQuality(2) -- Giảm mức đồ họa xuống để tối ưu FPS
